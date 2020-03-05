@@ -6,6 +6,8 @@ import sys
 import numpy
 import scipy.sparse
 import tensorflow as tf
+import numpy as np
+import scipy.sparse as sp
 
 def concatenate_csr_matrices_by_rows(matrix1, matrix2):
   """Concatenates sparse csr matrices matrix1 above matrix2.
@@ -44,8 +46,9 @@ def ReadDataset(dataset_dir, dataset_name):
 
   allx = load_x(base_path + '.allx')
   ally = numpy.array(numpy.load(base_path + '.ally'), dtype='float32')
-  testx = load_x(base_path + '.tx')
+  tx = load_x(base_path + '.tx')
   #### added #### 
+  ty = numpy.array(numpy.load(base_path + '.ty'), dtype='float32')
   #testy = load_x(base_path + '.ty')
   x = load_x(base_path + '.x')
   y = load_x(base_path + '.y')

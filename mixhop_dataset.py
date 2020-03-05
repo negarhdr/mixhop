@@ -40,63 +40,53 @@ def ReadDataset(dataset_dir, dataset_name):
     Dataset object (defined below).
   """
   base_path = os.path.join(dataset_dir, dataset_name)
-  edge_lists = pickle.load(open(base_path + '.graph', 'rb'))
+  graph = pickle.load(open(base_path + '.graph', 'rb'))
 
   allx = load_x(base_path + '.allx')
   ally = numpy.array(numpy.load(base_path + '.ally'), dtype='float32')
+  testx = load_x(base_path + '.tx')
+  #### added #### 
+  #testy = load_x(base_path + '.ty')
+  x = load_x(base_path + '.x')
+  y = load_x(base_path + '.y')
 
-  # TODO(haija): Support Homophily Datasets [and upload them]
-  if False: #FLAGS.homophily_dataset:
-    # TODO(haija): Support Homophily and analysis of delta-op.
-    if False:  #FLAGS.analyze_delta_opness:
-      x_distances = []
-      radius = 300
-      angles = numpy.arange(0, numpy.pi*2, numpy.pi*2/50.0)
-      for theta in angles:
-        gaussian_y = radius * numpy.cos(theta)
-        gaussian_x = radius * numpy.sin(theta)
-        center = numpy.array([gaussian_x, gaussian_y])
-        x_distances.append(
-            numpy.expand_dims( ((allx - center)**2).sum(axis=1), 1))
-      x_sims = numpy.concatenate(x_distances, axis=1)
-      x_sims = numpy.exp(-1e-5*x_sims) 
-      allx = x_sims
+  # Add test
+  test_idx_reorder = list(map(int, open(base_path + '.test.index').read().split('\n')[:-1]))
+  #### added ####
+  test_idx_range = np.sort(test_idx_reorder) ### added
+  test_idx_range_full = range(allx.shape[0], len(graph))
+  isolated_node_idx = np.setdiff1d(test_idx_range_full, test_idx_reorder)
+  tx_extended = sp.lil_matrix((len(test_idx_range_full), x.shape[1]))
+  tx_extended[test_idx_range-allx.shape[0], :] = tx
+  tx = tx_extended
+  ty_extended = np.zeros((len(test_idx_range_full), y.shape[1]))
+  ty_extended[test_idx_range-allx.shape[0], :] = ty
+  ty = ty_extended
+  
+  features = sp.vstack((allx, tx)).tolil()
+  features[test_idx_reorder, :] = features[test_idx_range, :]
+  idx_all = np.setdiff1d(range(len(graph)), isolated_node_idx)
+  ####
+  #num_test_examples = max(test_idx_reorder) - min(test_idx_reorder) + 1
+  #sparse_zeros = scipy.sparse.csr_matrix((num_test_examples, allx.shape[1]), dtype='float32')
+  #allx = concatenate_csr_matrices_by_rows(allx, sparse_zeros)
+  #llallx = allx.tolil()
+  #llallx[test_idx] = testx
+  ##allx = scipy.vstack([allx, sparse_zeros])
+  
+  test_idx_set = set(test_idx_reorder)
+  idx_test = test_idx_range.tolist()
+  labels = np.vstack((ally, ty))
+  labels[test_idx_reorder, :] = labels[test_idx_range, :]
+  #testy = numpy.array(numpy.load(base_path + '.ty'), dtype='float32')
+  #ally = numpy.concatenate([ally, numpy.zeros((num_test_examples, ally.shape[1]), dtype='float32')],0)
+  #ally[test_idx_reorder] = testy
 
-    llallx = scipy.sparse.csr_matrix(allx).tolil()
-
-    num_train = len(ally) / 3
-    # TODO Load from offline.
-    test_idx = range(num_train*2, num_train*3)
-
-  else:
-    testx = load_x(base_path + '.tx')
-
-    # Add test
-    test_idx = list(map(int, open(base_path + '.test.index').read().split('\n')[:-1]))
-
-    num_test_examples = max(test_idx) - min(test_idx) + 1
-    sparse_zeros = scipy.sparse.csr_matrix((num_test_examples, allx.shape[1]),
-                                           dtype='float32')
-
-    allx = concatenate_csr_matrices_by_rows(allx, sparse_zeros)
-    llallx = allx.tolil()
-    llallx[test_idx] = testx
-    #allx = scipy.vstack([allx, sparse_zeros])
-
-    test_idx_set = set(test_idx)
-
-
-    testy = numpy.array(numpy.load(base_path + '.ty'), dtype='float32')
-    ally = numpy.concatenate(
-        [ally, numpy.zeros((num_test_examples, ally.shape[1]), dtype='float32')],
-        0)
-    ally[test_idx] = testy
-
-  num_nodes = len(edge_lists)
+  num_nodes = len(graph)
 
   # Will be used to construct (sparse) adjacency matrix.
   edge_sets = collections.defaultdict(set)
-  for node, neighbors in edge_lists.items():
+  for node, neighbors in graph.items():
     edge_sets[node].add(node)   # Add self-connections
     for n in neighbors:
       edge_sets[node].add(n)
@@ -113,8 +103,8 @@ def ReadDataset(dataset_dir, dataset_name):
   adj_indices = numpy.array(adj_indices, dtype='int32')
   adj_values = numpy.array(adj_values, dtype='float32')
   return Dataset(
-      num_nodes=num_nodes, edge_sets=edge_sets, test_indices=test_idx,
-      adj_indices=adj_indices, adj_values=adj_values, allx=llallx, ally=ally)
+      num_nodes=num_nodes, edge_sets=edge_sets, test_indices=idx_test,
+      adj_indices=adj_indices, adj_values=adj_values, allx=features, ally=labels)
 
 
 class Dataset(object):
